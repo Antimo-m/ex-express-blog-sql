@@ -24,22 +24,42 @@ const index = (req, res) => {
 
 //Show
 const show = (req, res) => {
-    const id = parseInt(req.params.id);
-    const post = napoli.find(p => p.id === id)
+    const id = req.params.id;
+    const sql = "SELECT * FROM posts WHERE id = ?";
+    const tagSql = `
+    SELECT tags.label
+    FROM tags
+    JOIN post_tag ON tags.id = post_tag.tag_id
+    WHERE post_tag.post_id = ?
+  `;
+    //prima query
+    connection.query(sql, [id], (err, result) => {
+        if (err) {
+             return res.status(500).json(err);
+        }
+        if (result.length === 0) {
+             return res.status(404).json({ error: "page not found" });
+        }
 
-    if (post) {
-        res.json(post)
-    } else {
-        res.json({ message: `il post con id ${id} non è stato trovato` }) //message per restiture l'errore in formato json
-    }
-}
+
+        const post = result[0]; // prendo il post
+        // Seconda query
+        connection.query(tagSql, [id], (err, tagResults) => {
+            if (err) {
+                return res.status(500).json(err);
+            }
+
+            post.tags = tagResults.map(tag => tag.label); 
+            res.json(post);
+        });
+    });
+};
 
 
 //Store
 const store = (req, res) => {
     const newid = napoli[napoli.length -1].id +1;// andiamo a generare l'id manualmente
 
-    
     const newPost = {
         id:newid,
         ...req.body
@@ -81,12 +101,21 @@ res.status(200).json(ModifyPost)
 
 
 const destroy = (req,res) => {
-    const id = parseInt(req.params.id);
-    const postIndex = napoli.findIndex(post => post.id === id);
+  const id = req.params.id
+  const sql = `DELETE FROM posts where id = ?`
 
-    napoli.splice(postIndex, 1);
-    res.status(200).json({message: "post con id ${id} eliminato"})
-
+  connection.query(sql, [id], (err, result) => {
+    if (err) {
+      return  res.status(500).json({message: "errore interno"})
+    }
+    if (result.length === 0) {
+        return res.status(404).json({
+            error: "Post non trovato"
+        })
+    }res.status(204).json({
+        success: "Post eliminato con successo"
+    })
+  })
 }
 
 export default { index, show, store, update, modify, destroy}
